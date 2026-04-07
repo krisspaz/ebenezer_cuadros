@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
   ChevronLeft, ChevronRight, Calendar, X, Users, Layers,
-  Trash2, Edit3, Check, AlertTriangle
+  Trash2, Edit3, Check
 } from 'lucide-react'
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval,
-  startOfWeek, endOfWeek, isSameMonth, isToday, parseISO, addMonths, subMonths
+  startOfWeek, endOfWeek, isSameMonth, isToday, parseISO,
+  addMonths, subMonths, addWeeks, subWeeks
 } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -14,28 +15,40 @@ import PDFExporter from './PDFExporter'
 
 const DAYS_OF_WEEK = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
-export default function CalendarView() {
-  const [currentMonth, setCurrentMonth] = useState(new Date())
+export default function CalendarView({ initialMode = 'month' }) {
+  const [currentDate, setCurrentDate]   = useState(new Date())
+  const [viewMode, setViewMode]         = useState(initialMode) // 'month' | 'week' | 'list'
   const [schedules, setSchedules]       = useState([])
   const [allAssignments, setAllAssignments] = useState([])
   const [people, setPeople]             = useState([])
   const [selectedDay, setSelectedDay]   = useState(null)
   const [loading, setLoading]           = useState(false)
-  const [viewMode, setViewMode]         = useState('month')
-  const [deleteConfirm, setDeleteConfirm] = useState(null) // scheduleId pending confirm
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
 
   useEffect(() => { fetchPeople() }, [])
-  useEffect(() => { fetchMonth() }, [currentMonth])
+  useEffect(() => { fetchData() }, [currentDate, viewMode])
 
   const fetchPeople = async () => {
     const { data } = await supabase.from('people').select('id, name').order('name')
     setPeople(data || [])
   }
 
-  const fetchMonth = async () => {
+  const getDateRange = useCallback(() => {
+    if (viewMode === 'week') {
+      return {
+        start: format(startOfWeek(currentDate, { weekStartsOn: 0 }), 'yyyy-MM-dd'),
+        end:   format(endOfWeek(currentDate,   { weekStartsOn: 0 }), 'yyyy-MM-dd'),
+      }
+    }
+    return {
+      start: format(startOfMonth(currentDate), 'yyyy-MM-dd'),
+      end:   format(endOfMonth(currentDate),   'yyyy-MM-dd'),
+    }
+  }, [currentDate, viewMode])
+
+  const fetchData = async () => {
     setLoading(true)
-    const start = format(startOfMonth(currentMonth), 'yyyy-MM-dd')
-    const end   = format(endOfMonth(currentMonth),   'yyyy-MM-dd')
+    const { start, end } = getDateRange()
 
     const { data } = await supabase
       .from('schedules')
@@ -57,20 +70,34 @@ export default function CalendarView() {
   }
 
   const handleDelete = async (scheduleId) => {
-    // CASCADE on FK handles assignment deletion
     await supabase.from('schedules').delete().eq('id', scheduleId)
     setDeleteConfirm(null)
     setSelectedDay(null)
-    fetchMonth()
+    fetchData()
   }
 
-  // Build calendar grid
-  const monthStart = startOfMonth(currentMonth)
-  const monthEnd   = endOfMonth(currentMonth)
-  const calStart   = startOfWeek(monthStart, { weekStartsOn: 0 })
-  const calEnd     = endOfWeek(monthEnd,     { weekStartsOn: 0 })
+  // Navigation
+  const goNext = () => {
+    if (viewMode === 'week') setCurrentDate(d => addWeeks(d, 1))
+    else setCurrentDate(d => addMonths(d, 1))
+  }
+  const goPrev = () => {
+    if (viewMode === 'week') setCurrentDate(d => subWeeks(d, 1))
+    else setCurrentDate(d => subMonths(d, 1))
+  }
+  const goToday = () => setCurrentDate(new Date())
+
+  // Month grid data
+  const calStart   = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 0 })
+  const calEnd     = endOfWeek(endOfMonth(currentDate),     { weekStartsOn: 0 })
   const calDays    = eachDayOfInterval({ start: calStart, end: calEnd })
 
+  // Week grid data
+  const weekStart  = startOfWeek(currentDate, { weekStartsOn: 0 })
+  const weekEnd    = endOfWeek(currentDate,   { weekStartsOn: 0 })
+  const weekDays   = eachDayOfInterval({ start: weekStart, end: weekEnd })
+
+  // Index by date
   const schedulesByDate = {}
   schedules.forEach(sch => {
     if (!schedulesByDate[sch.date]) schedulesByDate[sch.date] = []
@@ -81,42 +108,51 @@ export default function CalendarView() {
     ? (schedulesByDate[format(selectedDay, 'yyyy-MM-dd')] || [])
     : []
 
-  const totalAssignmentsThisMonth = allAssignments.length
+  // Navigator label
+  const navLabel = viewMode === 'week'
+    ? `${format(weekStart, "d 'de' MMM", { locale: es })} – ${format(weekEnd, "d 'de' MMM yyyy", { locale: es })}`
+    : format(currentDate, 'MMMM yyyy', { locale: es })
+
   const serviceDays = Object.keys(schedulesByDate).length
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:'1.75rem' }}>
+
       {/* Header */}
       <div className="view-header">
         <div>
           <h1>Calendario de Servicio</h1>
-          <p>Vista mensual de todas las asignaciones confirmadas.</p>
+          <p>Vista de asignaciones confirmadas.</p>
         </div>
         <div style={{ display:'flex', gap:'0.6rem', alignItems:'center', flexWrap:'wrap' }}>
           {allAssignments.length > 0 && <PDFExporter assignments={allAssignments} />}
           <div style={{ display:'flex', gap:'0.3rem', background:'var(--bg-mid)',
             border:'1px solid var(--glass-border)', borderRadius:10, padding:'0.25rem' }}>
-            {['month','list'].map(m => (
-              <button key={m} onClick={() => setViewMode(m)}
+            {[
+              { id:'month', label:'Mes'    },
+              { id:'week',  label:'Semana' },
+              { id:'list',  label:'Lista'  },
+            ].map(({ id, label }) => (
+              <button key={id} onClick={() => setViewMode(id)}
                 style={{
                   padding:'0.45rem 0.9rem', borderRadius:8, fontSize:'0.82rem', fontWeight:700,
                   cursor:'pointer', transition:'all 0.2s', border:'none',
-                  background: viewMode === m ? 'var(--primary)' : 'transparent',
-                  color: viewMode === m ? '#fff' : 'var(--text-secondary)',
+                  background: viewMode === id ? 'var(--primary)' : 'transparent',
+                  color:      viewMode === id ? '#fff'           : 'var(--text-secondary)',
                 }}>
-                {m === 'month' ? 'Mes' : 'Lista'}
+                {label}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Stats row */}
+      {/* Stats */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:'1rem' }}>
         {[
-          { label:'Días de Servicio', value: serviceDays,                  icon: Calendar, color:'#3b82f6' },
-          { label:'Asignaciones',      value: totalAssignmentsThisMonth,   icon: Users,    color:'#8b5cf6' },
-          { label:'Servicios',         value: schedules.length,            icon: Layers,   color:'#10b981' },
+          { label: viewMode === 'week' ? 'Días con Servicio' : 'Días de Servicio', value: serviceDays,              icon: Calendar, color:'#3b82f6' },
+          { label:'Asignaciones', value: allAssignments.length, icon: Users,    color:'#8b5cf6' },
+          { label:'Servicios',    value: schedules.length,      icon: Layers,   color:'#10b981' },
         ].map((s, i) => (
           <div key={i} className="glass-card"
             style={{ display:'flex', alignItems:'center', gap:'0.85rem', padding:'1rem 1.25rem' }}>
@@ -132,24 +168,24 @@ export default function CalendarView() {
         ))}
       </div>
 
-      {/* Month navigator */}
+      {/* Navigator */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <h2 style={{ fontSize:'1.3rem', fontWeight:800, textTransform:'capitalize' }}>
-          {format(currentMonth, "MMMM yyyy", { locale: es })}
+          {navLabel}
         </h2>
         <div style={{ display:'flex', gap:'0.4rem' }}>
-          <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+          <button onClick={goPrev}
             style={{ background:'var(--bg-surface)', border:'1px solid var(--glass-border)',
               borderRadius:8, padding:'0.45rem 0.7rem', color:'var(--text-primary)', cursor:'pointer' }}>
             <ChevronLeft size={16} />
           </button>
-          <button onClick={() => setCurrentMonth(new Date())}
+          <button onClick={goToday}
             style={{ background:'var(--bg-surface)', border:'1px solid var(--glass-border)',
               borderRadius:8, padding:'0.45rem 0.9rem', fontSize:'0.82rem',
               fontWeight:700, color:'var(--text-secondary)', cursor:'pointer' }}>
             Hoy
           </button>
-          <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+          <button onClick={goNext}
             style={{ background:'var(--bg-surface)', border:'1px solid var(--glass-border)',
               borderRadius:8, padding:'0.45rem 0.7rem', color:'var(--text-primary)', cursor:'pointer' }}>
             <ChevronRight size={16} />
@@ -157,8 +193,8 @@ export default function CalendarView() {
         </div>
       </div>
 
-      {/* Calendar grid */}
-      {viewMode === 'month' ? (
+      {/* ── Month view ─────────────────────────────────────────────── */}
+      {viewMode === 'month' && (
         <div className="glass-card" style={{ padding:'1.25rem', overflowX:'auto' }}>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(7, minmax(80px, 1fr))', gap:'4px', marginBottom:'4px' }}>
             {DAYS_OF_WEEK.map(d => (
@@ -169,13 +205,12 @@ export default function CalendarView() {
               </div>
             ))}
           </div>
-
           <div style={{ display:'grid', gridTemplateColumns:'repeat(7, minmax(80px, 1fr))', gap:'4px' }}>
             {calDays.map((day, i) => {
-              const dateStr = format(day, 'yyyy-MM-dd')
+              const dateStr     = format(day, 'yyyy-MM-dd')
               const daySchedules = schedulesByDate[dateStr] || []
-              const isThisMonth = isSameMonth(day, currentMonth)
-              const isTodayDate = isToday(day)
+              const inMonth     = isSameMonth(day, currentDate)
+              const todayDate   = isToday(day)
               const isSelected  = selectedDay && format(selectedDay, 'yyyy-MM-dd') === dateStr
               const hasService  = daySchedules.length > 0
 
@@ -184,37 +219,35 @@ export default function CalendarView() {
                   onClick={() => setSelectedDay(hasService ? day : null)}
                   style={{
                     minHeight:80, padding:'0.4rem', borderRadius:8,
-                    background: isSelected
-                      ? 'hsla(217,91%,60%,0.15)'
-                      : isTodayDate ? 'hsla(217,91%,60%,0.08)'
-                      : hasService ? 'var(--bg-mid)'
-                      : 'rgba(255,255,255,0.01)',
+                    background: isSelected   ? 'hsla(217,91%,60%,0.15)'
+                              : todayDate    ? 'hsla(217,91%,60%,0.08)'
+                              : hasService   ? 'var(--bg-mid)'
+                              : 'rgba(255,255,255,0.01)',
                     border:`1px solid ${
-                      isSelected ? 'hsla(217,91%,60%,0.4)'
-                      : isTodayDate ? 'hsla(217,91%,60%,0.25)'
+                      isSelected  ? 'hsla(217,91%,60%,0.4)'
+                      : todayDate ? 'hsla(217,91%,60%,0.25)'
                       : hasService ? 'var(--bg-surface)'
                       : 'var(--bg-elevated)'}`,
-                    opacity: isThisMonth ? 1 : 0.3,
+                    opacity: inMonth ? 1 : 0.3,
                     cursor: hasService ? 'pointer' : 'default',
                     transition:'all 0.15s',
                   }}>
                   <span style={{
-                    fontSize:'0.82rem', fontWeight: isTodayDate ? 900 : 600,
-                    color: isTodayDate ? 'var(--primary)' : isThisMonth ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    fontSize:'0.82rem', fontWeight: todayDate ? 900 : 600,
                     display:'block', marginBottom:'0.3rem',
-                    ...(isTodayDate ? {
-                      background:'var(--primary)', color:'#fff',
-                      width:22, height:22, borderRadius:'50%',
-                      display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.75rem'
+                    color: todayDate ? 'var(--primary)' : inMonth ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    ...(todayDate ? {
+                      background:'var(--primary)', color:'#fff', width:22, height:22,
+                      borderRadius:'50%', display:'flex', alignItems:'center',
+                      justifyContent:'center', fontSize:'0.75rem'
                     } : {})
                   }}>
                     {format(day, 'd')}
                   </span>
                   {daySchedules.map((sch, si) => (
                     <div key={si} style={{
-                      fontSize:'0.65rem', fontWeight:700, padding:'1px 5px',
-                      borderRadius:4, marginBottom:2, overflow:'hidden', whiteSpace:'nowrap',
-                      textOverflow:'ellipsis',
+                      fontSize:'0.65rem', fontWeight:700, padding:'1px 5px', borderRadius:4,
+                      marginBottom:2, overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis',
                       background:'hsla(217,91%,60%,0.2)', color:'hsl(217,91%,75%)',
                       border:'1px solid hsla(217,91%,60%,0.25)',
                     }}>
@@ -226,7 +259,81 @@ export default function CalendarView() {
             })}
           </div>
         </div>
-      ) : (
+      )}
+
+      {/* ── Week view ──────────────────────────────────────────────── */}
+      {viewMode === 'week' && (
+        <div className="glass-card" style={{ padding:'1.25rem', overflowX:'auto' }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(7, minmax(120px, 1fr))', gap:'6px' }}>
+            {weekDays.map((day, i) => {
+              const dateStr      = format(day, 'yyyy-MM-dd')
+              const daySchedules = schedulesByDate[dateStr] || []
+              const todayDate    = isToday(day)
+              const isSelected   = selectedDay && format(selectedDay, 'yyyy-MM-dd') === dateStr
+
+              return (
+                <div key={i} style={{
+                  borderRadius:10,
+                  border:`1px solid ${
+                    isSelected  ? 'hsla(217,91%,60%,0.4)'
+                    : todayDate ? 'hsla(217,91%,60%,0.3)'
+                    : 'var(--bg-elevated)'}`,
+                  background: todayDate ? 'hsla(217,91%,60%,0.06)' : 'var(--bg-mid)',
+                  overflow:'hidden',
+                }}>
+                  {/* Day header */}
+                  <div style={{
+                    padding:'0.55rem 0.7rem',
+                    borderBottom:'1px solid var(--glass-border)',
+                    background: todayDate ? 'hsla(217,91%,60%,0.12)' : 'var(--bg-elevated)',
+                  }}>
+                    <p style={{ fontSize:'0.7rem', fontWeight:700, color:'var(--text-secondary)',
+                      textTransform:'uppercase', letterSpacing:'0.4px' }}>
+                      {DAYS_OF_WEEK[i]}
+                    </p>
+                    <p style={{
+                      fontSize:'1.3rem', fontWeight:900, lineHeight:1.1,
+                      color: todayDate ? 'var(--primary)' : 'var(--text-primary)',
+                    }}>
+                      {format(day, 'd')}
+                    </p>
+                  </div>
+
+                  {/* Services */}
+                  <div style={{ padding:'0.5rem', minHeight:80, display:'flex', flexDirection:'column', gap:'0.4rem' }}>
+                    {daySchedules.length === 0 ? (
+                      <p style={{ fontSize:'0.7rem', color:'var(--text-muted)', textAlign:'center',
+                        marginTop:'0.75rem', fontStyle:'italic' }}>
+                        Sin servicio
+                      </p>
+                    ) : (
+                      daySchedules.map(sch => (
+                        <button key={sch.id}
+                          onClick={() => setSelectedDay(day)}
+                          style={{
+                            textAlign:'left', padding:'0.5rem 0.6rem', borderRadius:7, cursor:'pointer',
+                            background:'hsla(217,91%,60%,0.15)', border:'1px solid hsla(217,91%,60%,0.25)',
+                            color:'hsl(217,91%,75%)',
+                          }}>
+                          <p style={{ fontSize:'0.72rem', fontWeight:800, marginBottom:'0.2rem' }}>
+                            {sch.service_name}
+                          </p>
+                          <p style={{ fontSize:'0.65rem', color:'var(--text-secondary)' }}>
+                            {sch.assignments?.length || 0} asignaciones
+                          </p>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── List view ─────────────────────────────────────────────── */}
+      {viewMode === 'list' && (
         <div style={{ display:'flex', flexDirection:'column', gap:'0.85rem' }}>
           {loading && (
             <p style={{ color:'var(--text-secondary)', textAlign:'center', padding:'2rem' }}>Cargando...</p>
@@ -246,7 +353,7 @@ export default function CalendarView() {
               onRequestDelete={setDeleteConfirm}
               onConfirmDelete={handleDelete}
               onCancelDelete={() => setDeleteConfirm(null)}
-              onRefresh={fetchMonth}
+              onRefresh={fetchData}
             />
           ))}
         </div>
@@ -290,7 +397,7 @@ export default function CalendarView() {
                   onRequestDelete={setDeleteConfirm}
                   onConfirmDelete={handleDelete}
                   onCancelDelete={() => setDeleteConfirm(null)}
-                  onRefresh={() => { fetchMonth(); setSelectedDay(null) }}
+                  onRefresh={() => { fetchData(); setSelectedDay(null) }}
                 />
               ))}
             </motion.div>
@@ -304,7 +411,7 @@ export default function CalendarView() {
 // ── Service card ─────────────────────────────────────────────────────
 function ServiceCard({ schedule, compact, people, deleteConfirm, onRequestDelete, onConfirmDelete, onCancelDelete, onRefresh }) {
   const [isEditing, setIsEditing] = useState(false)
-  const [editedMap, setEditedMap] = useState({})  // { assignmentId: personId }
+  const [editedMap, setEditedMap] = useState({})
   const [saving, setSaving]       = useState(false)
 
   const isPendingDelete = deleteConfirm === schedule.id
@@ -323,10 +430,7 @@ function ServiceCard({ schedule, compact, people, deleteConfirm, onRequestDelete
     setIsEditing(true)
   }
 
-  const handleCancelEdit = () => {
-    setIsEditing(false)
-    setEditedMap({})
-  }
+  const handleCancelEdit = () => { setIsEditing(false); setEditedMap({}) }
 
   const handleSaveEdit = async () => {
     setSaving(true)
@@ -355,8 +459,7 @@ function ServiceCard({ schedule, compact, people, deleteConfirm, onRequestDelete
         marginBottom:'0.85rem', flexWrap:'wrap', gap:'0.5rem' }}>
         <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', flexWrap:'wrap', flex:1 }}>
           {!compact && (
-            <p style={{ fontSize:'0.78rem', color:'var(--text-secondary)', fontWeight:700,
-              textTransform:'capitalize' }}>
+            <p style={{ fontSize:'0.78rem', color:'var(--text-secondary)', fontWeight:700, textTransform:'capitalize' }}>
               {format(parseISO(schedule.date + 'T12:00:00'), "EEEE dd 'de' MMMM", { locale: es })}
             </p>
           )}
@@ -390,9 +493,7 @@ function ServiceCard({ schedule, compact, people, deleteConfirm, onRequestDelete
             </>
           ) : isPendingDelete ? (
             <>
-              <span style={{ fontSize:'0.78rem', color:'var(--error)', fontWeight:600 }}>
-                ¿Eliminar?
-              </span>
+              <span style={{ fontSize:'0.78rem', color:'var(--error)', fontWeight:600 }}>¿Eliminar?</span>
               <button onClick={() => onConfirmDelete(schedule.id)}
                 style={{ display:'flex', alignItems:'center', gap:'0.3rem',
                   padding:'0.35rem 0.7rem', borderRadius:8, fontSize:'0.78rem', fontWeight:700,
@@ -409,7 +510,6 @@ function ServiceCard({ schedule, compact, people, deleteConfirm, onRequestDelete
           ) : (
             <>
               <button onClick={handleStartEdit}
-                title="Editar asignaciones"
                 style={{ display:'flex', alignItems:'center', gap:'0.3rem',
                   padding:'0.35rem 0.7rem', borderRadius:8, fontSize:'0.78rem', fontWeight:600,
                   border:'1px solid var(--glass-border)', background:'transparent',
@@ -417,7 +517,6 @@ function ServiceCard({ schedule, compact, people, deleteConfirm, onRequestDelete
                 <Edit3 size={13} /> Editar
               </button>
               <button onClick={() => onRequestDelete(schedule.id)}
-                title="Eliminar servicio"
                 style={{ display:'flex', alignItems:'center', gap:'0.3rem',
                   padding:'0.35rem 0.6rem', borderRadius:8, fontSize:'0.78rem',
                   border:'1px solid hsla(0,84%,62%,0.3)', background:'hsla(0,84%,62%,0.07)',
