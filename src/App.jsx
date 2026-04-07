@@ -82,7 +82,7 @@ export default function App() {
   }
 
   if (loading || (session && userRole === null)) return <Spinner />
-  if (!session) return <LoginView />
+  if (!session) return <LoginView theme={theme} toggleTheme={toggleTheme} />
   return <MainLayout session={session} userRole={userRole} theme={theme} toggleTheme={toggleTheme} />
 }
 
@@ -100,7 +100,7 @@ function Spinner() {
 }
 
 /* ── Login ────────────────────────────────────────────────── */
-function LoginView() {
+function LoginView({ theme, toggleTheme }) {
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading]   = useState(false)
@@ -121,22 +121,29 @@ function LoginView() {
         width:600, height:600, borderRadius:'50%', pointerEvents:'none',
         background:'radial-gradient(circle, hsla(217,91%,60%,0.06) 0%, transparent 70%)' }} />
 
+      {/* Theme toggle top-right */}
+      <button onClick={toggleTheme}
+        style={{ position:'fixed', top:'1.25rem', right:'1.25rem',
+          background:'var(--bg-surface)', border:'1px solid var(--glass-border)',
+          borderRadius:10, padding:'0.5rem 0.8rem', cursor:'pointer',
+          color:'var(--text-secondary)', display:'flex', alignItems:'center', gap:'0.4rem',
+          fontSize:'0.8rem', fontWeight:600 }}>
+        {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+        {theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}
+      </button>
+
       <motion.div initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}
         transition={{ duration:0.4, ease:[0.4,0,0.2,1] }}
         className="glass-card"
         style={{ maxWidth:420, width:'100%', padding:'2.5rem', position:'relative' }}>
 
         <div style={{ textAlign:'center', marginBottom:'2rem' }}>
-          <div style={{
-            width:56, height:56,
-            background:'linear-gradient(135deg, var(--primary), var(--accent))',
-            borderRadius:16, display:'flex', alignItems:'center', justifyContent:'center',
-            margin:'0 auto 1rem', boxShadow:'0 8px 24px var(--primary-glow)'
-          }}>
-            <Shield color="white" size={26} />
-          </div>
-          <h1 style={{ fontSize:'1.6rem', fontWeight:900, marginBottom:'0.3rem' }}>Sanctuary</h1>
-          <p style={{ color:'var(--text-secondary)', fontSize:'0.9rem' }}>Sistema de Gestión de Servicio</p>
+          <img
+            src={theme === 'dark' ? '/logo-dark.jpg' : '/logo-light.jpg'}
+            alt="Iglesia de Cristo Ebenezer Cobán"
+            style={{ maxWidth:320, width:'100%', height:'auto', borderRadius:8, marginBottom:'0.75rem' }}
+          />
+          <p style={{ color:'var(--text-secondary)', fontSize:'0.85rem' }}>Sistema de Gestión de Servicio</p>
         </div>
 
         <form onSubmit={handleLogin} style={{ display:'flex', flexDirection:'column', gap:'1.1rem' }}>
@@ -168,7 +175,7 @@ function LoginView() {
 }
 
 /* ── Main shell ───────────────────────────────────────────── */
-function MainLayout({ session, userRole }) {
+function MainLayout({ session, userRole, theme, toggleTheme }) {
   const navItems = ALL_NAV.filter(n => n.roles.includes(userRole))
   const defaultTab = userRole === 'admin' ? 'dashboard' : 'calendar-month'
 
@@ -188,8 +195,11 @@ function MainLayout({ session, userRole }) {
           <button className="hamburger" onClick={() => setSidebarOpen(true)}>
             <Menu size={18} />
           </button>
-          <span style={{ fontFamily:'Outfit', fontWeight:900, fontSize:'1.05rem',
-            letterSpacing:'-0.02em' }}>Sanctuary</span>
+          <img
+            src={theme === 'dark' ? '/logo-dark.jpg' : '/logo-light.jpg'}
+            alt="Ebenezer Cobán"
+            style={{ height:28, width:'auto', borderRadius:4 }}
+          />
         </div>
         <div style={{
           width:32, height:32, borderRadius:'50%',
@@ -203,9 +213,13 @@ function MainLayout({ session, userRole }) {
         {sidebarOpen && <div className="mobile-overlay" onClick={() => setSidebarOpen(false)} />}
 
         <aside className={`app-sidebar${sidebarOpen ? ' app-sidebar-open' : ''}`}>
-          <div className="sidebar-brand">
-            <div className="sidebar-logo"><Shield color="white" size={20} /></div>
-            <span className="sidebar-brand-name">Sanctuary</span>
+          <div className="sidebar-brand" style={{ paddingBottom:'0.5rem' }}>
+            <img
+              src={theme === 'dark' ? '/logo-dark.jpg' : '/logo-light.jpg'}
+              alt="Ebenezer Cobán"
+              style={{ flex:1, height:36, width:'auto', objectFit:'contain',
+                objectPosition:'left', borderRadius:4, minWidth:0 }}
+            />
             <button className="hamburger sidebar-close-btn" onClick={() => setSidebarOpen(false)}>
               <X size={16} />
             </button>
@@ -237,6 +251,17 @@ function MainLayout({ session, userRole }) {
                 <p style={{ color:'var(--text-muted)', fontSize:'0.72rem' }}>{roleLabel}</p>
               </div>
             </div>
+            <button onClick={toggleTheme}
+              style={{ display:'flex', alignItems:'center', gap:'0.55rem',
+                width:'100%', padding:'0.55rem 0.85rem', borderRadius:9, border:'none',
+                background:'transparent', color:'var(--text-secondary)',
+                fontSize:'0.83rem', fontWeight:600, cursor:'pointer',
+                transition:'all 0.2s', marginBottom:'0.15rem' }}
+              onMouseEnter={e => { e.currentTarget.style.background='var(--bg-elevated)'; e.currentTarget.style.color='var(--text-primary)' }}
+              onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.color='var(--text-secondary)' }}>
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+              {theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}
+            </button>
             <button className="nav-logout" onClick={() => supabase.auth.signOut()}>
               <LogOut size={16} />
               Cerrar Sesión
