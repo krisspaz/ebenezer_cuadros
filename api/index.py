@@ -14,6 +14,7 @@ Environment variables required:
 
 import os
 import random
+from datetime import date
 from typing import Optional
 from collections import defaultdict
 
@@ -86,7 +87,7 @@ class ServiceSlot(BaseModel):
 
 class GenerateRequest(BaseModel):
     service_slots: list[ServiceSlot]
-    subareas: list[str]  # list of subarea UUIDs
+    subareas: list[str]          # list of subarea UUIDs
 
 
 class Assignment(BaseModel):
@@ -114,13 +115,17 @@ def run_scheduler(
     people: list[dict],
     person_skills: dict,
     exceptions: dict,
+    person_avail_days: dict,
 ) -> list[dict]:
-    counts = {p["id"]: 0 for p in people}
+    counts  = {p["id"]: 0 for p in people}
     results = []
 
     for slot in service_slots:
-        slot_date = slot["date"]
+        slot_date    = slot["date"]
         service_name = slot["service_name"]
+        dow          = date.fromisoformat(slot_date).weekday()  # Mon=0…Sun=6
+        # Convert to Sunday=0 … Saturday=6
+        dow = (dow + 1) % 7
         used_in_slot: set[str] = set()
 
         for subarea_id in subarea_ids:
@@ -129,31 +134,31 @@ def run_scheduler(
                 if subarea_id in person_skills.get(p["id"], set())
                 and slot_date not in exceptions.get(p["id"], set())
                 and p["id"] not in used_in_slot
+                and (
+                    not person_avail_days.get(p["id"])          # no restriction
+                    or dow in person_avail_days[p["id"]]        # day is allowed
+                )
             ]
 
             if not eligible:
                 results.append({
-                    "date": slot_date,
-                    "service_name": service_name,
-                    "subarea_id": subarea_id,
-                    "person_id": None,
-                    "person_name": None,
-                    "has_conflict": True,
+                    "date": slot_date, "service_name": service_name,
+                    "subarea_id": subarea_id, "person_id": None,
+                    "person_name": None, "has_conflict": True,
                 })
                 continue
 
-            min_count = min(counts[p["id"]] for p in eligible)
+            min_count  = min(counts[p["id"]] for p in eligible)
             candidates = [p for p in eligible if counts[p["id"]] == min_count]
-            chosen = random.choice(candidates)
+            chosen     = random.choice(candidates)
+
             used_in_slot.add(chosen["id"])
             counts[chosen["id"]] += 1
+
             results.append({
-                "date": slot_date,
-                "service_name": service_name,
-                "subarea_id": subarea_id,
-                "person_id": chosen["id"],
-                "person_name": chosen["name"],
-                "has_conflict": False,
+                "date": slot_date, "service_name": service_name,
+                "subarea_id": subarea_id, "person_id": chosen["id"],
+                "person_name": chosen["name"], "has_conflict": False,
             })
 
     return results
@@ -298,8 +303,13 @@ def generate_schedule(body: GenerateRequest):
     for row in (ex_res.data or []):
         exceptions[row["person_id"]].add(row["date"])
 
+    avail_res = sb.table("person_available_days").select("person_id, day_of_week").execute()
+    person_avail_days: dict[str, set[int]] = defaultdict(set)
+    for row in (avail_res.data or []):
+        person_avail_days[row["person_id"]].add(row["day_of_week"])
+
     slots = [{"date": s.date, "service_name": s.service_name} for s in body.service_slots]
-    return run_scheduler(slots, body.subareas, people, person_skills, exceptions)
+    return run_scheduler(slots, body.subareas, people, person_skills, exceptions, person_avail_days)
 
 
 @app.post("/save-schedule")

@@ -39,21 +39,26 @@ function saveServiceTypes(types) {
 }
 
 // ── Client-side scheduling algorithm ────────────────────────────────
-function runScheduler({ serviceSlots, subareaIds, people, personSkills, exceptions }) {
+function runScheduler({ serviceSlots, subareaIds, people, personSkills, exceptions, personAvailDays }) {
   const counts = {}
   people.forEach(p => { counts[p.id] = 0 })
   const results = []
 
   for (const slot of serviceSlots) {
     const { date, service_name } = slot
+    const dow        = new Date(date + 'T12:00:00').getDay()  // 0=Sun … 6=Sat
     const usedInSlot = new Set()
 
     for (const subareaId of subareaIds) {
-      const eligible = people.filter(p =>
-        personSkills[p.id]?.includes(subareaId) &&
-        !exceptions[p.id]?.includes(date) &&
-        !usedInSlot.has(p.id)
-      )
+      const eligible = people.filter(p => {
+        if (!personSkills[p.id]?.includes(subareaId)) return false
+        if (exceptions[p.id]?.includes(date))          return false
+        if (usedInSlot.has(p.id))                      return false
+        // Day-of-week restriction: empty = any day OK
+        const avail = personAvailDays[p.id]
+        if (avail && avail.length > 0 && !avail.includes(dow)) return false
+        return true
+      })
 
       if (eligible.length === 0) {
         results.push({ date, service_name, subarea_id: subareaId,
@@ -64,8 +69,10 @@ function runScheduler({ serviceSlots, subareaIds, people, personSkills, exceptio
       const minCount = Math.min(...eligible.map(p => counts[p.id]))
       const candidates = eligible.filter(p => counts[p.id] === minCount)
       const chosen = candidates[Math.floor(Math.random() * candidates.length)]
+
       usedInSlot.add(chosen.id)
       counts[chosen.id]++
+
       results.push({ date, service_name, subarea_id: subareaId,
         person_id: chosen.id, person_name: chosen.name, has_conflict: false })
     }
@@ -86,18 +93,26 @@ export default function SchedulerUI() {
   const [saved, setSaved]                   = useState(false)
   const [serviceTypes, setServiceTypes]     = useState(loadServiceTypes)
   const [showTypeEditor, setShowTypeEditor] = useState(false)
+  const [personAvailDays, setPersonAvailDays] = useState({})
 
   useEffect(() => { fetchData() }, [])
 
   const fetchData = async () => {
-    const [{ data: sData }, { data: aData }, { data: pData }] = await Promise.all([
+    const [{ data: sData }, { data: aData }, { data: pData }, { data: adData }] = await Promise.all([
       supabase.from('subareas').select('*, areas(name)').order('name'),
       supabase.from('areas').select('*').order('name'),
       supabase.from('people').select('*, person_subareas(subarea_id)').order('name'),
+      supabase.from('person_available_days').select('person_id, day_of_week'),
     ])
     setSubareas(sData || [])
     setAreas(aData || [])
     setPeople(pData || [])
+    const availMap = {}
+    ;(adData || []).forEach(row => {
+      if (!availMap[row.person_id]) availMap[row.person_id] = []
+      availMap[row.person_id].push(row.day_of_week)
+    })
+    setPersonAvailDays(availMap)
     if (sData) setSelectedSubareas(sData.map(s => s.id))
   }
 
@@ -165,7 +180,7 @@ export default function SchedulerUI() {
       exceptions[e.person_id].push(e.date)
     })
 
-    setGenerated(runScheduler({ serviceSlots: slots, subareaIds: selectedSubareas, people, personSkills, exceptions }))
+    setGenerated(runScheduler({ serviceSlots: slots, subareaIds: selectedSubareas, people, personSkills, exceptions, personAvailDays }))
     setLoading(false)
   }
 

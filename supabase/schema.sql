@@ -126,3 +126,20 @@ CREATE POLICY "user_roles_read" ON user_roles
 
 -- Only service role (backend) can insert/update/delete
 -- (no client-side write policy = only service_role key can write)
+
+-- =============================================================
+-- Person Available Days
+-- Which days of the week (0=Sun … 6=Sat) each person CAN serve.
+-- Empty = no restriction (can serve any day).
+-- =============================================================
+
+CREATE TABLE IF NOT EXISTS person_available_days (
+  person_id   UUID    REFERENCES people(id) ON DELETE CASCADE,
+  day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+  PRIMARY KEY (person_id, day_of_week)
+);
+
+ALTER TABLE person_available_days ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "auth_all_avail_days" ON person_available_days
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);
