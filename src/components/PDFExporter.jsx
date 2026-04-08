@@ -91,7 +91,7 @@ const S = StyleSheet.create({
 })
 
 // ── Document from SAVED assignments ────────────────────────────────
-function SavedDocument({ assignments }) {
+function SavedDocument({ assignments, label }) {
   const sorted = [...assignments].sort((a, b) =>
     new Date(a.schedules.date) - new Date(b.schedules.date)
   )
@@ -105,9 +105,9 @@ function SavedDocument({ assignments }) {
     grouped[key].areas[areaName].push(a)
   })
 
-  const monthLabel = Object.values(grouped)[0]?.date
+  const monthLabel = label || (Object.values(grouped)[0]?.date
     ? format(parseISO(Object.values(grouped)[0].date + 'T12:00:00'), "MMMM yyyy", { locale: es })
-    : ''
+    : '')
 
   return (
     <Document>
@@ -235,12 +235,13 @@ function GeneratedDocument({ generated, subareas }) {
 }
 
 // ── Exported components ─────────────────────────────────────────────
-export default function PDFExporter({ assignments }) {
+export default function PDFExporter({ assignments, label, fileName }) {
   if (!assignments || assignments.length === 0) return null
+  const docFileName = fileName || `Cronograma_${format(new Date(), 'yyyy-MM-dd')}.pdf`
   return (
     <PDFDownloadLink
-      document={<SavedDocument assignments={assignments} />}
-      fileName={`Cronograma_${format(new Date(), 'yyyy-MM-dd')}.pdf`}
+      document={<SavedDocument assignments={assignments} label={label} />}
+      fileName={docFileName}
       className="btn-primary"
       style={{ textDecoration:'none', display:'inline-flex', alignItems:'center',
         padding:'0.6rem 1.2rem', gap:'0.5rem', fontSize:'0.88rem', borderRadius:10 }}

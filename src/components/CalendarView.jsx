@@ -23,7 +23,9 @@ export default function CalendarView({ initialMode = 'month' }) {
   const [people, setPeople]             = useState([])
   const [selectedDay, setSelectedDay]   = useState(null)
   const [loading, setLoading]           = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [deleteConfirm, setDeleteConfirm]       = useState(null)
+  const [deleteAllConfirm, setDeleteAllConfirm] = useState(false)
+  const [deletingAll, setDeletingAll]           = useState(false)
 
   useEffect(() => { fetchPeople() }, [])
   useEffect(() => { fetchData() }, [currentDate, viewMode])
@@ -76,6 +78,16 @@ export default function CalendarView({ initialMode = 'month' }) {
     fetchData()
   }
 
+  const handleDeleteAll = async () => {
+    setDeletingAll(true)
+    const { start, end } = getDateRange()
+    await supabase.from('schedules').delete().gte('date', start).lte('date', end)
+    setDeleteAllConfirm(false)
+    setSelectedDay(null)
+    setDeletingAll(false)
+    fetchData()
+  }
+
   // Navigation
   const goNext = () => {
     if (viewMode === 'week') setCurrentDate(d => addWeeks(d, 1))
@@ -108,10 +120,19 @@ export default function CalendarView({ initialMode = 'month' }) {
     ? (schedulesByDate[format(selectedDay, 'yyyy-MM-dd')] || [])
     : []
 
-  // Navigator label
+  // Navigator / PDF labels
+  const weekRangeLabel = `${format(weekStart, "d 'de' MMM", { locale: es })} – ${format(weekEnd, "d 'de' MMM yyyy", { locale: es })}`
   const navLabel = viewMode === 'week'
-    ? `${format(weekStart, "d 'de' MMM", { locale: es })} – ${format(weekEnd, "d 'de' MMM yyyy", { locale: es })}`
+    ? weekRangeLabel
     : format(currentDate, 'MMMM yyyy', { locale: es })
+
+  const pdfLabel    = viewMode === 'week'
+    ? `Semana ${weekRangeLabel}`
+    : format(currentDate, "MMMM yyyy", { locale: es })
+
+  const pdfFileName = viewMode === 'week'
+    ? `Cronograma_Semana_${format(weekStart,'dd-MM')}_al_${format(weekEnd,'dd-MM-yyyy')}.pdf`
+    : `Cronograma_${format(currentDate,'MMMM_yyyy',{locale:es})}.pdf`
 
   const serviceDays = Object.keys(schedulesByDate).length
 
@@ -125,7 +146,48 @@ export default function CalendarView({ initialMode = 'month' }) {
           <p>Vista de asignaciones confirmadas.</p>
         </div>
         <div style={{ display:'flex', gap:'0.6rem', alignItems:'center', flexWrap:'wrap' }}>
-          {allAssignments.length > 0 && <PDFExporter assignments={allAssignments} />}
+          {allAssignments.length > 0 && (
+            <PDFExporter
+              assignments={allAssignments}
+              label={pdfLabel}
+              fileName={pdfFileName}
+            />
+          )}
+
+          {/* Delete all button */}
+          {schedules.length > 0 && (
+            deleteAllConfirm ? (
+              <div style={{ display:'flex', alignItems:'center', gap:'0.4rem',
+                padding:'0.35rem 0.7rem', borderRadius:9,
+                border:'1px solid hsla(0,84%,62%,0.4)', background:'hsla(0,84%,62%,0.08)' }}>
+                <span style={{ fontSize:'0.78rem', color:'hsl(0,80%,72%)', fontWeight:600, whiteSpace:'nowrap' }}>
+                  ¿Eliminar {viewMode === 'week' ? 'semana' : 'mes'} completo?
+                </span>
+                <button onClick={handleDeleteAll} disabled={deletingAll}
+                  style={{ padding:'0.25rem 0.65rem', borderRadius:7, fontSize:'0.78rem', fontWeight:700,
+                    border:'none', background:'var(--error)', color:'#fff', cursor:'pointer' }}>
+                  {deletingAll ? '...' : 'Sí'}
+                </button>
+                <button onClick={() => setDeleteAllConfirm(false)}
+                  style={{ padding:'0.25rem 0.5rem', borderRadius:7, fontSize:'0.78rem',
+                    border:'1px solid var(--glass-border)', background:'transparent',
+                    color:'var(--text-secondary)', cursor:'pointer' }}>
+                  <X size={12} />
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setDeleteAllConfirm(true)}
+                title={`Eliminar todos los servicios de ${viewMode === 'week' ? 'esta semana' : 'este mes'}`}
+                style={{ display:'flex', alignItems:'center', gap:'0.4rem',
+                  padding:'0.5rem 0.9rem', borderRadius:9, fontSize:'0.82rem', fontWeight:700,
+                  border:'1px solid hsla(0,84%,62%,0.3)', background:'hsla(0,84%,62%,0.07)',
+                  color:'hsl(0,80%,72%)', cursor:'pointer' }}>
+                <Trash2 size={14} />
+                Eliminar {viewMode === 'week' ? 'semana' : 'mes'}
+              </button>
+            )
+          )}
+
           <div style={{ display:'flex', gap:'0.3rem', background:'var(--bg-mid)',
             border:'1px solid var(--glass-border)', borderRadius:10, padding:'0.25rem' }}>
             {[
