@@ -59,8 +59,10 @@ function runScheduler({ serviceSlots, subareaIds, people, personSkills, exceptio
     const { date, service_name } = slot
     const dow        = new Date(date + 'T12:00:00').getDay()  // 0=Sun … 6=Sat
     const usedInSlot = new Set()
+    // Shuffle role order each service so no role always "steals" the multi-skilled people
+    const slotSubareas = shuffle(subareaIds)
 
-    for (const subareaId of subareaIds) {
+    for (const subareaId of slotSubareas) {
       const eligible = pool.filter(p => {
         if (!personSkills[p.id]?.includes(subareaId)) return false
         if (exceptions[p.id]?.includes(date))          return false

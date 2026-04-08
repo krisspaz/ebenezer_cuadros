@@ -130,8 +130,11 @@ def run_scheduler(
         # Convert to Sunday=0 … Saturday=6
         dow = (dow + 1) % 7
         used_in_slot: set[str] = set()
+        # Shuffle role order each service so no role always consumes multi-skilled people first
+        slot_subarea_ids = subarea_ids[:]
+        random.shuffle(slot_subarea_ids)
 
-        for subarea_id in subarea_ids:
+        for subarea_id in slot_subarea_ids:
             eligible = [
                 p for p in pool
                 if subarea_id in person_skills.get(p["id"], set())
