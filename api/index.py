@@ -117,7 +117,10 @@ def run_scheduler(
     exceptions: dict,
     person_avail_days: dict,
 ) -> list[dict]:
-    counts  = {p["id"]: 0 for p in people}
+    # Shuffle so no one has a fixed-order advantage when counts are tied
+    pool    = people[:]
+    random.shuffle(pool)
+    counts  = {p["id"]: 0 for p in pool}
     results = []
 
     for slot in service_slots:
@@ -130,7 +133,7 @@ def run_scheduler(
 
         for subarea_id in subarea_ids:
             eligible = [
-                p for p in people
+                p for p in pool
                 if subarea_id in person_skills.get(p["id"], set())
                 and slot_date not in exceptions.get(p["id"], set())
                 and p["id"] not in used_in_slot

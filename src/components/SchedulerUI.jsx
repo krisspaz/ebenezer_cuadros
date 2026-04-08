@@ -39,9 +39,20 @@ function saveServiceTypes(types) {
 }
 
 // ── Client-side scheduling algorithm ────────────────────────────────
+function shuffle(arr) {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
 function runScheduler({ serviceSlots, subareaIds, people, personSkills, exceptions, personAvailDays }) {
+  // Shuffle so no one has alphabetical advantage when counts are tied
+  const pool   = shuffle(people)
   const counts = {}
-  people.forEach(p => { counts[p.id] = 0 })
+  pool.forEach(p => { counts[p.id] = 0 })
   const results = []
 
   for (const slot of serviceSlots) {
@@ -50,7 +61,7 @@ function runScheduler({ serviceSlots, subareaIds, people, personSkills, exceptio
     const usedInSlot = new Set()
 
     for (const subareaId of subareaIds) {
-      const eligible = people.filter(p => {
+      const eligible = pool.filter(p => {
         if (!personSkills[p.id]?.includes(subareaId)) return false
         if (exceptions[p.id]?.includes(date))          return false
         if (usedInSlot.has(p.id))                      return false
