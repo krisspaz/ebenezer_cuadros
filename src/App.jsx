@@ -63,7 +63,7 @@ export default function App() {
   }, [session])
 
   const fetchUserRole = async (sess) => {
-    const apiUrl = import.meta.env.VITE_API_URL
+    const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : '')
     if (apiUrl) {
       try {
         const token = sess.access_token
@@ -427,7 +427,7 @@ function DashboardView() {
 
 /* ── Settings view (admin only) ───────────────────────────── */
 function SettingsView({ session }) {
-  const apiUrl = import.meta.env.VITE_API_URL
+  const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : '')
   const token  = session?.access_token
 
   const [users, setUsers]         = useState([])
