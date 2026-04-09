@@ -116,10 +116,17 @@ function LoginView({ theme, toggleTheme }) {
 
   return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center',
-      minHeight:'100vh', background:'var(--bg-deep)', padding:'1.5rem' }}>
-      <div style={{ position:'fixed', top:'20%', left:'50%', transform:'translateX(-50%)',
-        width:600, height:600, borderRadius:'50%', pointerEvents:'none',
-        background:'radial-gradient(circle, hsla(217,91%,60%,0.06) 0%, transparent 70%)' }} />
+      minHeight:'100vh', background:'var(--bg-deep)', padding:'1.5rem', position:'relative', overflow:'hidden' }}>
+      {/* Decorative orbs */}
+      <div style={{ position:'fixed', top:'-15%', left:'-10%', width:700, height:700,
+        borderRadius:'50%', pointerEvents:'none',
+        background:'radial-gradient(circle, hsla(220,90%,60%,0.1) 0%, transparent 65%)' }} />
+      <div style={{ position:'fixed', bottom:'-20%', right:'-5%', width:600, height:600,
+        borderRadius:'50%', pointerEvents:'none',
+        background:'radial-gradient(circle, hsla(270,80%,65%,0.09) 0%, transparent 65%)' }} />
+      <div style={{ position:'fixed', top:'50%', right:'15%', width:300, height:300,
+        borderRadius:'50%', pointerEvents:'none',
+        background:'radial-gradient(circle, hsla(190,90%,50%,0.06) 0%, transparent 60%)' }} />
 
       {/* Theme toggle top-right */}
       <button onClick={toggleTheme}
@@ -135,7 +142,9 @@ function LoginView({ theme, toggleTheme }) {
       <motion.div initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}
         transition={{ duration:0.4, ease:[0.4,0,0.2,1] }}
         className="glass-card"
-        style={{ maxWidth:420, width:'100%', padding:'2.5rem', position:'relative' }}>
+        style={{ maxWidth:420, width:'100%', padding:'2.5rem', position:'relative',
+          borderColor:'hsla(220,80%,60%,0.3)',
+          boxShadow:'0 0 0 1px hsla(220,80%,60%,0.15), 0 24px 64px rgba(0,0,0,0.4)' }}>
 
         <div style={{ textAlign:'center', marginBottom:'2rem' }}>
           <img
@@ -331,9 +340,12 @@ function DashboardView() {
   }
 
   const STATS = [
-    { label:'Equipo',    value:stats.people,    icon:Users,      color:'#3b82f6', bg:'hsla(217,91%,60%,0.1)'  },
-    { label:'Áreas',     value:stats.areas,     icon:ShieldCheck, color:'#8b5cf6', bg:'hsla(250,84%,65%,0.1)' },
-    { label:'Servicios', value:stats.schedules, icon:Clock,      color:'#10b981', bg:'hsla(142,65%,45%,0.1)'  },
+    { label:'Equipo',    value:stats.people,    icon:Users,
+      grad:'linear-gradient(135deg, #3b82f6, #60a5fa)', glow:'hsla(220,90%,60%,0.3)', border:'hsla(220,90%,60%,0.25)' },
+    { label:'Áreas',     value:stats.areas,     icon:ShieldCheck,
+      grad:'linear-gradient(135deg, #7c3aed, #a78bfa)', glow:'hsla(263,70%,60%,0.3)', border:'hsla(263,70%,60%,0.25)' },
+    { label:'Servicios', value:stats.schedules, icon:Clock,
+      grad:'linear-gradient(135deg, #059669, #34d399)', glow:'hsla(160,80%,40%,0.3)', border:'hsla(160,80%,40%,0.25)' },
   ]
 
   return (
@@ -341,7 +353,11 @@ function DashboardView() {
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end',
         flexWrap:'wrap', gap:'1rem' }}>
         <div>
-          <h1 style={{ fontSize:'1.9rem', fontWeight:900, marginBottom:'0.2rem' }}>Panel de Control</h1>
+          <h1 style={{ fontSize:'1.9rem', fontWeight:900, marginBottom:'0.2rem',
+            background:'linear-gradient(90deg, var(--primary), var(--accent))',
+            WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>
+            Panel de Control
+          </h1>
           <p style={{ color:'var(--text-secondary)', fontSize:'0.9rem', textTransform:'capitalize' }}>
             {format(new Date(), "EEEE, dd 'de' MMMM yyyy", { locale:es })}
           </p>
@@ -349,20 +365,22 @@ function DashboardView() {
         {assignments.length > 0 && <PDFExporter assignments={assignments} />}
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:'1rem' }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:'1rem' }}>
         {STATS.map((s, i) => (
-          <motion.div key={i} initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}
-            transition={{ delay:i*0.07 }}
-            style={{ background:'var(--bg-surface)', border:'1px solid var(--border)',
-              borderRadius:'var(--radius-lg)', padding:'1.25rem 1.5rem',
-              display:'flex', alignItems:'center', gap:'1rem' }}>
-            <div style={{ background:s.bg, padding:'0.7rem', borderRadius:12, flexShrink:0 }}>
-              <s.icon size={22} color={s.color} />
+          <motion.div key={i} initial={{ opacity:0, y:14 }} animate={{ opacity:1, y:0 }}
+            transition={{ delay:i*0.08 }}
+            style={{ background:'var(--bg-surface)', border:`1px solid ${s.border}`,
+              borderRadius:'var(--radius-lg)', padding:'1.4rem 1.5rem',
+              display:'flex', alignItems:'center', gap:'1.1rem',
+              boxShadow:`0 4px 24px ${s.glow}` }}>
+            <div style={{ background:s.grad, padding:'0.85rem', borderRadius:14, flexShrink:0,
+              boxShadow:`0 4px 14px ${s.glow}` }}>
+              <s.icon size={24} color="#fff" />
             </div>
             <div>
               <p style={{ color:'var(--text-secondary)', fontSize:'0.78rem', fontWeight:700,
                 textTransform:'uppercase', letterSpacing:'0.05em' }}>{s.label}</p>
-              <p style={{ fontSize:'2rem', fontWeight:900, lineHeight:1, marginTop:'0.1rem' }}>{s.value}</p>
+              <p style={{ fontSize:'2.1rem', fontWeight:900, lineHeight:1, marginTop:'0.1rem' }}>{s.value}</p>
             </div>
           </motion.div>
         ))}
@@ -396,8 +414,9 @@ function DashboardView() {
               }}>
                 <div style={{ display:'flex', alignItems:'center', gap:'0.85rem' }}>
                   <div style={{
-                    minWidth:42, height:42, background:'hsla(217,91%,60%,0.12)',
-                    border:'1px solid hsla(217,91%,60%,0.2)',
+                    minWidth:42, height:42,
+                    background:'linear-gradient(135deg, hsla(220,90%,60%,0.2), hsla(270,80%,65%,0.15))',
+                    border:'1px solid hsla(220,90%,60%,0.3)',
                     borderRadius:10, display:'flex', flexDirection:'column',
                     alignItems:'center', justifyContent:'center'
                   }}>
