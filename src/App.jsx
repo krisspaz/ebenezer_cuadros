@@ -18,14 +18,14 @@ import CalendarView        from './components/CalendarView'
 import PDFExporter         from './components/PDFExporter'
 
 const ALL_NAV = [
-  { id: 'dashboard',      label: 'Dashboard',      icon: LayoutDashboard, roles: ['admin'] },
-  { id: 'people',         label: 'Equipo',          icon: Users,           roles: ['admin'] },
-  { id: 'areas',          label: 'Áreas',           icon: ShieldCheck,     roles: ['admin'] },
-  { id: 'availability',   label: 'Disponibilidad',  icon: Ban,             roles: ['admin', 'viewer'] },
-  { id: 'scheduler',      label: 'Programador',     icon: Wand2,           roles: ['admin'] },
-  { id: 'calendar-month', label: 'Vista Mes',       icon: Calendar,        roles: ['admin', 'viewer'] },
-  { id: 'calendar-week',  label: 'Vista Semana',    icon: CalendarRange,   roles: ['admin', 'viewer'] },
-  { id: 'settings',       label: 'Configuración',   icon: Settings,        roles: ['admin'] },
+  { id: 'dashboard',      label: 'Dashboard',      icon: LayoutDashboard, roles: ['admin'],           color: '#60a5fa' },
+  { id: 'people',         label: 'Equipo',          icon: Users,           roles: ['admin'],           color: '#34d399' },
+  { id: 'areas',          label: 'Áreas',           icon: ShieldCheck,     roles: ['admin'],           color: '#a78bfa' },
+  { id: 'availability',   label: 'Disponibilidad',  icon: Ban,             roles: ['admin','viewer'],  color: '#fb923c' },
+  { id: 'scheduler',      label: 'Programador',     icon: Wand2,           roles: ['admin'],           color: '#f472b6' },
+  { id: 'calendar-month', label: 'Vista Mes',       icon: Calendar,        roles: ['admin','viewer'],  color: '#22d3ee' },
+  { id: 'calendar-week',  label: 'Vista Semana',    icon: CalendarRange,   roles: ['admin','viewer'],  color: '#38bdf8' },
+  { id: 'settings',       label: 'Configuración',   icon: Settings,        roles: ['admin'],           color: '#94a3b8' },
 ]
 
 /* ── App root ─────────────────────────────────────────────── */
@@ -226,14 +226,22 @@ function MainLayout({ session, userRole, theme, toggleTheme }) {
           </div>
 
           <nav className="sidebar-nav">
-            {navItems.map(item => (
-              <button key={item.id}
-                className={`nav-item${tab === item.id ? ' active' : ''}`}
-                onClick={() => navigate(item.id)}>
-                <item.icon size={18} />
-                {item.label}
-              </button>
-            ))}
+            {navItems.map(item => {
+              const isActive = tab === item.id
+              return (
+                <button key={item.id}
+                  className={`nav-item${isActive ? ' active' : ''}`}
+                  onClick={() => navigate(item.id)}
+                  style={isActive ? {
+                    color: item.color,
+                    background: `${item.color}18`,
+                    borderColor: `${item.color}35`,
+                  } : {}}>
+                  <item.icon size={18} color={isActive ? item.color : undefined} />
+                  {item.label}
+                </button>
+              )
+            })}
           </nav>
 
           <div className="sidebar-footer">
